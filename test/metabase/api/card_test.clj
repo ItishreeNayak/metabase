@@ -578,7 +578,7 @@
   "Call the collection endpoint, looking for instances of `model-str` as `user-kwd` in `collection-id`. Will return a
   map with the names of the items as keys and their position as the value"
   [user-kwd model-str collection-id]
-  (name->position ((user->client user-kwd) :get 200 (str "collection/" collection-id) :model model-str)))
+  (name->position ((user->client user-kwd) :get 200 (str "collection/" (u/get-id collection-id)) :model model-str)))
 
 (defmacro with-ordered-models-in-collection
   "Macro for creating many sequetial collection_position model instances, putting each in `collection`"

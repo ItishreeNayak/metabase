@@ -232,15 +232,21 @@
   (let [dash-before-update (api/write-check Dashboard id)]
     ;; Do various permissions checks as needed
     (collection/check-allowed-to-change-collection dash-before-update dash-updates)
-    (check-allowed-to-change-embedding dash-before-update dash-updates))
-  (api/check-500
-   (db/update! Dashboard id
-     ;; description, position, collection_id, and collection_position are allowed to be `nil`. Everything else must be
-     ;; non-nil
-     (u/select-keys-when dash-updates
-       :present #{:description :position :collection_id :collection_position}
-       :non-nil #{:name :parameters :caveats :points_of_interest :show_in_getting_started :enable_embedding
-                  :embedding_params :archived})))
+    (check-allowed-to-change-embedding dash-before-update dash-updates)
+    (api/check-500
+     (db/transaction
+
+       ;;If the dashboard has an updated position, or if the dashboard is moving to a new collection, we might need to
+       ;;adjust the collection position of other dashboards in the collection
+       (api/maybe-reconcile-collection-position! Dashboard dash-before-update dash-updates)
+
+       (db/update! Dashboard id
+         ;; description, position, collection_id, and collection_position are allowed to be `nil`. Everything else must be
+         ;; non-nil
+         (u/select-keys-when dash-updates
+           :present #{:description :position :collection_id :collection_position}
+           :non-nil #{:name :parameters :caveats :points_of_interest :show_in_getting_started :enable_embedding
+                      :embedding_params :archived})))))
   ;; now publish an event and return the updated Dashboard
   (u/prog1 (Dashboard id)
     (events/publish-event! :dashboard-update (assoc <> :actor_id api/*current-user-id*))))

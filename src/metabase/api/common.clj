@@ -535,10 +535,10 @@
         (update-fn! :+ [:>= new-position])
 
         (> new-position old-position)
-        (update-fn! :- [:<= new-position])
+        (update-fn! :- [:between old-position new-position])
 
         (< new-position old-position)
-        (update-fn! :+ [:>= new-position])))))
+        (update-fn! :+ [:between new-position old-position])))))
 
 (def ^:private ModelWithPosition
   "Intended to cover Cards/Dashboards/Pulses, it only asserts collection id and position, allowing extra keys"
@@ -553,7 +553,7 @@
    (s/optional-key :collection_position) (s/maybe su/IntGreaterThanZero)
    s/Any                                 s/Any})
 
-(s/defn maybe-reconcile-collection-position
+(s/defn maybe-reconcile-collection-position!
   "Generic function for working on cards/dashboards/pulses. Checks the before and after changes to see if there is any
   impact to the collection position of that model instance. If so, executes updates to fix the collection position
   that goes with the change."
@@ -567,19 +567,19 @@
     (cond
       ;; If the collection hasn't changed, but we have a new collection position, we might need to reconcile
       (and (not updated-collection?) updated-position?)
-      (reconcile-position-for-collection model new-collection-id old-position new-position)
+      (reconcile-position-for-collection! model old-collection-id old-position new-position)
 
       ;; If we have a new collection id, but no new position, reconcile the old collection, then update the new
       ;; collection with the existing position
       (and updated-collection? (not updated-position?))
       (do
-        (reconcile-position-for-collection model old-collection-id old-position nil)
-        (reconcile-position-for-collection model new-collection-id nil old-position))
+        (reconcile-position-for-collection! model old-collection-id old-position nil)
+        (reconcile-position-for-collection! model new-collection-id nil old-position))
 
       ;; We have a new collection id AND and new collection position
       ;; Update the old collection using the old position
       ;; Update the new collection using the new position
       (and updated-collection? updated-position?)
       (do
-        (reconcile-position-for-collection model old-collection-id old-position nil)
-        (reconcile-position-for-collection model new-collection-id nil new-position)))))
+        (reconcile-position-for-collection! model old-collection-id old-position nil)
+        (reconcile-position-for-collection! model new-collection-id nil new-position)))))

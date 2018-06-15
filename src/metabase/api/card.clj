@@ -408,7 +408,7 @@
       ;; then using that to base our position changes if the cards are moving to a different collection. Without
       ;; repeatable read here, it's possible we'll get duplicates
       (db/transaction
-        (api/maybe-reconcile-collection-position Card card-before-update card-updates)
+        (api/maybe-reconcile-collection-position! Card card-before-update card-updates)
 
         ;; ok, now save the Card
         (db/update! Card id
@@ -479,7 +479,7 @@
      (map (fn [idx {:keys [collection_id collection_position] :as card}]
             ;; We are removing this card from `collection_id` so we need to reconcile any
             ;; `collection_position` entries left behind by this move
-            (reconcile-position-for-collection collection_id collection_position nil)
+            (api/reconcile-position-for-collection! Card collection_id collection_position nil)
             ;; Now we can update the card with the new collection and a new calculated position
             ;; that appended to the end
             (db/update! Card (u/get-id card)

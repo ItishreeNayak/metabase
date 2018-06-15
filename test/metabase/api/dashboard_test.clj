@@ -351,6 +351,18 @@
      {:collection_position nil})
     (db/select-one-field :collection_position Dashboard :id (u/get-id dashboard))))
 
+;; Check that updating a collection position with fixup other dashboards in the collection
+(expect
+  {"c" 1
+   "a" 2
+   "b" 3
+   "d" 4}
+  (tt/with-temp Collection [collection]
+    (card-api-test/with-ordered-models-in-collection [Dashboard a b c d] collection
+      (perms/grant-collection-readwrite-permissions! (group/all-users) collection)
+      ((user->client :rasta) :put 200 (str "dashboard/" (u/get-id c))
+       {:collection_position 1})
+      (card-api-test/get-name->collection-position :rasta "dashboard" collection))))
 
 
 ;;; +----------------------------------------------------------------------------------------------------------------+
