@@ -375,58 +375,6 @@
       :else
       nil)))
 
-(defn- reconcile-position-for-collection
-  [collection-id old-position new-position]
-  (when (not= new-position old-position)
-    (cond
-      (and (nil? new-position)
-           old-position)
-      (db/update-where! Card {:collection_id collection-id
-                              :collection_position [:> old-position]}
-        :collection_position (honeysql.types/call :- :collection_position 1))
-
-      (and new-position (nil? old-position))
-      (db/update-where! Card {:collection_id collection-id
-                              :collection_position [:>= new-position]}
-        :collection_position (honeysql.types/call :+ :collection_position 1))
-      (> new-position old-position)
-      (db/update-where! Card {:collection_id collection-id
-                              :collection_position [:<= new-position]}
-        :collection_position (honeysql.types/call :- :collection_position 1))
-      (< new-position old-position)
-      (db/update-where! Card {:collection_id collection-id
-                              :collection_position [:>= new-position]}
-        :collection_position (honeysql.types/call :+ :collection_position 1)))))
-
-(defn- maybe-reconcile-collection-position
-  [{old-collection-id :collection_id, old-position :collection_position, :as card-before-update}
-   {new-collection-id :collection_id, new-position :collection_position, :as card-updates}]
-
-  (let [updated-collection? (and (contains? card-updates :collection_id)
-                                 (not= old-collection-id new-collection-id))
-        updated-position?   (and (contains? card-updates :collection_position)
-                                 (not= old-position new-position))]
-    (cond
-      ;; If the collection hasn't changed, but we have a new collection position, we might need to reconcile
-      (and (not updated-collection?) updated-position?)
-      (reconcile-position-for-collection new-collection-id old-position new-position)
-
-      ;; If we have a new collection id, but no new position, reconcile the old collection, then update the new
-      ;; collection with the existing position
-      (and updated-collection? (not updated-position?))
-      (do
-        (reconcile-position-for-collection old-collection-id old-position nil)
-        (reconcile-position-for-collection new-collection-id nil old-position))
-
-      ;; We have a new collection id AND and new collection position
-      ;; Update the old collection using the old position
-      ;; Update the new collection using the new position
-      (and updated-collection? updated-position?)
-      (do
-        (reconcile-position-for-collection old-collection-id old-position nil)
-        (reconcile-position-for-collection new-collection-id nil new-position)))))
-
-
 (api/defendpoint PUT "/:id"
   "Update a `Card`."
   [id :as {{:keys [dataset_query description display name visualization_settings archived collection_id
@@ -455,8 +403,12 @@
                          :result_metadata (result-metadata-for-updating card-before-update dataset_query
                                                                         result_metadata metadata_checksum))]
 
+      ;; Setting up a transaction here so that we don't get a partially reconciled/updated card. Read commited (the
+      ;; default) really isn't what we want here. We are querying for the max card position for a given collection,
+      ;; then using that to base our position changes if the cards are moving to a different collection. Without
+      ;; repeatable read here, it's possible we'll get duplicates
       (db/transaction
-        (maybe-reconcile-collection-position card-before-update card-updates)
+        (api/maybe-reconcile-collection-position Card card-before-update card-updates)
 
         ;; ok, now save the Card
         (db/update! Card id
