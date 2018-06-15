@@ -455,16 +455,17 @@
                          :result_metadata (result-metadata-for-updating card-before-update dataset_query
                                                                         result_metadata metadata_checksum))]
 
-      (maybe-reconcile-collection-position card-before-update card-updates)
+      (db/transaction
+        (maybe-reconcile-collection-position card-before-update card-updates)
 
-      ;; ok, now save the Card
-      (db/update! Card id
-        ;; `collection_id` and `description` can be `nil` (in order to unset them). Other values should only be
-        ;; modified if they're passed in as non-nil
-        (u/select-keys-when card-updates
-          :present #{:collection_id :collection_position :description}
-          :non-nil #{:dataset_query :display :name :visualization_settings :archived :enable_embedding
-                     :embedding_params :result_metadata})))
+        ;; ok, now save the Card
+        (db/update! Card id
+          ;; `collection_id` and `description` can be `nil` (in order to unset them). Other values should only be
+          ;; modified if they're passed in as non-nil
+          (u/select-keys-when card-updates
+            :present #{:collection_id :collection_position :description}
+            :non-nil #{:dataset_query :display :name :visualization_settings :archived :enable_embedding
+                       :embedding_params :result_metadata}))))
     ;; Fetch the updated Card from the DB
     (let [card (Card id)]
       (delete-alerts-if-needed! card-before-update card)
